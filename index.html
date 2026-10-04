@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مرافق المراجعة - القرآن الكريم</title>
+    <style>
+        :root {
+            --primary-color: #1b4332;
+            --accent-color: #2d6a4f;
+            --light-color: #d8f3dc;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-color: #212529;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        h1, h2 {
+            text-align: center;
+            color: var(--primary-color);
+            margin-top: 0;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 1em;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 5px;
+        }
+
+        button:hover {
+            background-color: var(--accent-color);
+        }
+
+        .secondary-btn {
+            background-color: #6c757d;
+        }
+
+        .card {
+            background: var(--light-color);
+            border-radius: 12px;
+            padding: 15px;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            height: 12px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .day-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .completed {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📖 رفيق المراجعة</h1>
+    
+    <!-- قسم الإعدادات -->
+    <div id="settings-section">
+        <div class="form-group">
+            <label for="saved-juz">عدد الأجزاء المحفوظة حاليًا (1 - 30):</label>
+            <input type="number" id="saved-juz" min="1" max="30" value="5">
+        </div>
+        
+        <div class="form-group">
+            <label for="cycle-days">مدة ختم المراجعة (بالأيام):</label>
+            <input type="number" id="cycle-days" min="1" max="60" value="7">
+        </div>
+
+        <button onclick="calculatePlan()">حفظ الجدولة وإصدار الخطة</button>
+        <button onclick="requestNotificationPermission()" class="secondary-btn">🔔 تفعيل التذكيرات اليومية</button>
+    </div>
+
+    <!-- قسم النتائج والتقدم -->
+    <div id="plan-section" style="display:none;">
+        <div class="card">
+            <h3>وردك اليومي</h3>
+            <p id="daily-target" style="font-size: 1.2em; font-weight: bold; color: var(--primary-color);"></p>
+            <p id="daily-pages" style="color: #555;"></p>
+            
+            <div class="progress-bar-container">
+                <div id="progress-bar" class="progress-bar"></div>
+            </div>
+            <p id="progress-text" style="font-size: 0.85em;"></p>
+            
+            <button onclick="markTodayComplete()">تأيم إنجاز ورد اليوم ✅</button>
+        </div>
+
+        <h2>جدول الدورة الحالية</h2>
+        <div id="schedule-list"></div>
+
+        <button onclick="toggleSettings()" class="secondary-btn" style="margin-top: 15px;">تعديل مقدار الحفظ أو المدة ⚙️</button>
+    </div>
+</div>
+
+<script>
+    let appData = JSON.parse(localStorage.getItem('quranReviewData')) || {
+        savedJuz: 5,
+        cycleDays: 7,
+        currentDay: 1,
+        completedDays: []
+    };
+
+    window.onload = function() {
+        if (appData.savedJuz) {
+            document.getElementById('saved-juz').value = appData.savedJuz;
+            document.getElementById('cycle-days').value = appData.cycleDays;
+            renderPlan();
+        }
+        setupNotifications();
+    };
+
+    function calculatePlan() {
+        const savedJuz = parseInt(document.getElementById('saved-juz').value);
+        const cycleDays = parseInt(document.getElementById('cycle-days').value);
+
+        if (!savedJuz || !cycleDays || savedJuz < 1 || cycleDays < 1) {
+            alert('يرجى إدخال قيم صحيحة.');
+            return;
+        }
+
+        appData.savedJuz = savedJuz;
+        appData.cycleDays = cycleDays;
+        appData.currentDay = 1;
+        appData.completedDays = [];
+        
+        saveData();
+        renderPlan();
+    }
+
+    function renderPlan() {
+        document.getElementById('settings-section').style.display = 'none';
+        document.getElementById('plan-section').style.display = 'block';
+
+        const totalPages = appData.savedJuz * 20; // الجزء تقريباً 20 صفحة
+        const pagesPerDay = Math.ceil(totalPages / appData.cycleDays);
+        const juzPerDay = (appData.savedJuz / appData.cycleDays).toFixed(1);
+
+        document.getElementById('daily-target').innerText = `${juzPerDay} جزء يوميًا`;
+        document.getElementById('daily-pages').innerText = `(حوالي ${pagesPerDay} صفحة daily)`;
+
+        // تحديث شريط التقدم
+        const progressPercent = Math.round((appData.completedDays.length / appData.cycleDays) * 100);
+        document.getElementById('progress-bar').style.width = `${progressPercent}%`;
+        document.getElementById('progress-text').innerText = `تم إنجاز ${appData.completedDays.length} من ${appData.cycleDays} أيام (${progressPercent}%)`;
+
+        // بناء القائمة
+        const scheduleList = document.getElementById('schedule-list');
+        scheduleList.innerHTML = '';
+
+        for (let i = 1; i <= appData.cycleDays; i++) {
+            const isDone = appData.completedDays.includes(i);
+            const startPage = ((i - 1) * pagesPerDay) + 1;
+            const endPage = Math.min(i * pagesPerDay, totalPages);
+
+            const dayDiv = document.createElement('div');
+            dayDiv.className = `day-item ${isDone ? 'completed' : ''}`;
+            dayDiv.innerHTML = `
+                <span><strong>اليوم ${i}:</strong> من صفحة ${startPage} إلى ${endPage}</span>
+                <span>${isDone ? '✅' : '⏳'}</span>
+            `;
+            scheduleList.appendChild(dayDiv);
+        }
+    }
+
+    function markTodayComplete() {
+        if (!appData.completedDays.includes(appData.currentDay) && appData.currentDay <= appData.cycleDays) {
+            appData.completedDays.push(appData.currentDay);
+            if (appData.currentDay < appData.cycleDays) {
+                appData.currentDay++;
+            }
+            saveData();
+            renderPlan();
+        } else if (appData.completedDays.length === appData.cycleDays) {
+            alert('ما شاء الله! أتممت دورة المراجعة كاملة. سيتم إعادة بدء الدورة.');
+            appData.completedDays = [];
+            appData.currentDay = 1;
+            saveData();
+            renderPlan();
+        }
+    }
+
+    function toggleSettings() {
+        document.getElementById('settings-section').style.display = 'block';
+        document.getElementById('plan-section').style.display = 'none';
+    }
+
+    function saveData() {
+        localStorage.setItem('quranReviewData', JSON.stringify(appData));
+    }
+
+    // إدارة الإشعارات والتذكيرات
+    function requestNotificationPermission() {
+        if ('Notification' in window) {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    alert('تم تفعيل التذكيرات بنجاح!');
+                    scheduleDailyNotification();
+                } else {
+                    alert('تم رفض الإشعارات. يمكنك تفعيلها من إعدادات المتصفح/الجهاز.');
+                }
+            });
+        } else {
+            alert('التطبيق لا يدعم الإشعارات على هذا المتصفح.');
+        }
+    }
+
+    function scheduleDailyNotification() {
+        if (Notification.permission === 'granted') {
+            // إرسال إشعار توضيحي عند التفعيل
+            new Notification('رفيق المراجعة 📖', {
+                body: 'تذكر مراجعة وردك اليومي للقرآن الكريم لتثبيت الحفظ.',
+                icon: 'https://cdn-icons-png.flaticon.com/512/2904/2904843.png'
+            });
+        }
+    }
+</script>
+
+</body>
+</html>
